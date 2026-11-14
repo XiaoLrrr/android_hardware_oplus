@@ -19,8 +19,12 @@ AntiFlicker::AntiFlicker() : mOplusDisplayFd(open("/dev/oplus_display", O_RDWR))
 
 ndk::ScopedAStatus AntiFlicker::getEnabled(bool* _aidl_return) {
     unsigned int value;
-    if (ioctl(mOplusDisplayFd, PANEL_IOCTL_GET_PWM_PULSE, &value) != 0 &&
-        ioctl(mOplusDisplayFd, PANEL_IOCTL_GET_PWM_TURBO, &value) != 0 &&
+    int rc = ioctl(mOplusDisplayFd, PANEL_IOCTL_GET_PWM_PULSE, &value);
+    if (rc >= 0) {
+        *_aidl_return = (rc >= 3) ? (value >= 2) : (value > 0);
+        return ndk::ScopedAStatus::ok();
+    }
+    if (ioctl(mOplusDisplayFd, PANEL_IOCTL_GET_PWM_TURBO, &value) != 0 &&
         ioctl(mOplusDisplayFd, PANEL_IOCTL_GET_DIMLAYER_BL_EN, &value) != 0) {
         LOG(ERROR) << "Failed to read current AntiFlicker state";
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
@@ -34,9 +38,21 @@ ndk::ScopedAStatus AntiFlicker::setEnabled(bool enabled) {
     if (auto status = getEnabled(&isEnabled); !status.isOk()) {
         return status;
     }
+    if (isEnabled == enabled) {
+        return ndk::ScopedAStatus::ok();
+    }
+    unsigned int current;
+    int rc = ioctl(mOplusDisplayFd, PANEL_IOCTL_GET_PWM_PULSE, &current);
+    if (rc >= 0) {
+        unsigned int value = (rc >= 3) ? (enabled ? 2 : 1) : (enabled ? 1 : 0);
+        if (ioctl(mOplusDisplayFd, PANEL_IOCTL_SET_PWM_PULSE, &value) != 0) {
+            LOG(ERROR) << "Failed to set AntiFlicker PWM pulse state";
+            return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+        }
+        return ndk::ScopedAStatus::ok();
+    }
     unsigned int value = enabled;
-    if (isEnabled != enabled && ioctl(mOplusDisplayFd, PANEL_IOCTL_SET_PWM_PULSE, &value) != 0 &&
-        ioctl(mOplusDisplayFd, PANEL_IOCTL_SET_PWM_TURBO, &value) != 0 &&
+    if (ioctl(mOplusDisplayFd, PANEL_IOCTL_SET_PWM_TURBO, &value) != 0 &&
         ioctl(mOplusDisplayFd, PANEL_IOCTL_SET_DIMLAYER_BL_EN, &value) != 0) {
         LOG(ERROR) << "Failed to set AntiFlicker state";
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
