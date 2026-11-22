@@ -23,6 +23,7 @@ cc_binary {
     name: "android.hardware.sensors-service.oplus-multihal",
     vendor: true,
     relative_install_path: "hw",
+    overrides: ["android.hardware.sensors-service.multihal"],
     srcs: [
         "service.cpp",
         "HalProxy.cpp",
